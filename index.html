@@ -21,7 +21,7 @@ header{display:flex;justify-content:space-between;align-items:center;padding:12p
 header button{background:none;border:1px solid #333;color:var(--fg);border-radius:99px;padding:6px 13px;font:inherit;font-size:10px;letter-spacing:.15em}
 #reading{text-align:center}
 #deg{font-size:54px;font-weight:700;line-height:1}
-#card{font-size:17px;color:var(--mute);margin-left:6px;text-transform:lowercase}
+#card{font-family:'Space Mono',monospace;font-size:17px;color:var(--mute);margin-left:6px;text-transform:lowercase}
 #dialwrap{display:flex;justify-content:center;margin:4px 0}
 #dial{width:min(74vw,37vh,300px);height:auto;aspect-ratio:1}
 #near{text-align:center}
@@ -103,34 +103,59 @@ const coord=(la,lo)=>`${Math.abs(la).toFixed(4)}°${la>=0?"N":"S"} ${Math.abs(lo
 const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const setStatus=t=>$("status").textContent=t;
 
-const SERVERS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+const SERVERS=["https://overpass-api.de/api/interpreter","https://z.overpass-api.de/api/interpreter","https://lz4.overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter","https://overpass.openstreetmap.fr/api/interpreter","https://overpass.osm.jp/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
 async function query(q){
   const body="data="+encodeURIComponent(q),ctrls=[];
   const tries=SERVERS.map(async u=>{
     const c=new AbortController();ctrls.push(c);
-    const t=setTimeout(()=>c.abort(),12000);
+    const t=setTimeout(()=>c.abort(),14000);
     try{
       const r=await fetch(u,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body,signal:c.signal});
       if(!r.ok)throw new Error("server busy ("+r.status+")");
-      return await r.json();
+      const j=await r.json();
+      if(!j.elements)throw new Error("bad reply");
+      return j;
     }catch(e){throw new Error(e.name==="AbortError"?"timed out":(e.message||"offline"))}
     finally{clearTimeout(t)}
   });
   try{const j=await Promise.any(tries);ctrls.forEach(c=>c.abort());return j}
   catch(e){throw new Error(e.errors?.[0]?.message||"offline")}
 }
+async function queryRetry(q){
+  let err;
+  for(let i=0;i<3;i++){
+    try{return await query(q)}
+    catch(e){err=e;if(i<2){setStatus("SERVERS BUSY: RETRYING ("+(i+1)+"/3)…");await new Promise(r=>setTimeout(r,2500))}}
+  }
+  throw err;
+}
+async function backup(lat,lon){
+  const r=await fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&radius=8&limit=40&osm_tag=amenity:pub`);
+  if(!r.ok)throw new Error("backup busy ("+r.status+")");
+  const j=await r.json();
+  return (j.features||[]).map(f=>({lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],name:f.properties.name||"Unnamed pub"}));
+}
+function save(lat,lon){try{localStorage.setItem("pc",JSON.stringify({lat,lon,pubs}))}catch(e){}}
 async function loadPubs(lat,lon){
   if(fetching)return;fetching=true;lastTry=Date.now();setStatus(pubs.length?"UPDATING…":"SEARCHING FOR PUBS…");
   try{
     for(const r of [2500,8000,25000]){
-      const j=await query(`[out:json][timeout:10];(node["amenity"="pub"](around:${r},${lat},${lon});way["amenity"="pub"](around:${r},${lat},${lon}););out center;`);
+      const j=await queryRetry(`[out:json][timeout:10];(node["amenity"="pub"](around:${r},${lat},${lon});way["amenity"="pub"](around:${r},${lat},${lon}););out center;`);
       const list=[];
       for(const e of j.elements||[]){const la=e.lat??e.center?.lat,lo=e.lon??e.center?.lon;if(la==null)continue;list.push({lat:la,lon:lo,name:e.tags?.name||"Unnamed pub"})}
       if(list.length>=3||r===25000){pubs=list;break}
     }
-    lastFetch={lat,lon};setStatus(pubs.length?"":"NO PUBS FOUND NEARBY");
-    try{localStorage.setItem("pc",JSON.stringify({lat,lon,pubs}))}catch(e){}
-  }catch(e){setStatus(pubs.length?"OFFLINE: SHOWING SAVED PUBS":"PUB DATA UNAVAILABLE: "+e.message.toUpperCase())}
+    lastFetch={lat,lon};setStatus(pubs.length?"":"NO PUBS FOUND NEARBY");save(lat,lon);
+  }catch(e){
+    try{
+      setStatus("TRYING BACKUP SOURCE…");
+      const l=await backup(lat,lon);
+      if(!l.length)throw e;
+      pubs=l;lastFetch={lat,lon};setStatus("");save(lat,lon);
+    }catch(e2){
+      setStatus(pubs.length?"OFFLINE: SHOWING SAVED PUBS":"PUB DATA UNAVAILABLE: "+e.message.toUpperCase()+". WILL RETRY");
+    }
+  }
   fetching=false;render();
 }
 
