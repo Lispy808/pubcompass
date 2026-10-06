@@ -3,126 +3,192 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1b1209">
+<meta name="theme-color" content="#000000">
 <title>Pub Compass</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  html,body{margin:0;height:100%;background:#1b1209;color:#f3e3c3;font-family:system-ui,sans-serif;text-align:center}
-  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;box-sizing:border-box}
-  h1{margin:0;font-size:1.1rem;letter-spacing:.15em;text-transform:uppercase;color:#d9a441}
-  #dial{width:260px;height:260px;border-radius:50%;border:4px solid #d9a441;display:flex;align-items:center;justify-content:center;position:relative;background:#2a1b0d}
-  #arrow{width:0;height:0;border-left:30px solid transparent;border-right:30px solid transparent;border-bottom:150px solid #e8553d;transition:transform .15s linear;transform-origin:50% 75%}
-  #name{font-size:1.5rem;font-weight:700;min-height:2em}
-  #dist{font-size:2.6rem;font-weight:800;color:#d9a441}
-  #status{font-size:.9rem;opacity:.8;min-height:2.4em}
-  button{background:#d9a441;color:#1b1209;border:0;border-radius:10px;padding:14px 26px;font-size:1rem;font-weight:700}
+:root{--fg:#ececec;--mute:#7a7a7a;--red:#ff2b2b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:var(--fg);font-family:'Space Mono',ui-monospace,monospace;overflow:hidden}
+body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) 18px env(safe-area-inset-bottom)}
+#topo{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+#topo path{fill:none;stroke:#fff;stroke-opacity:.07;stroke-width:.8}
+body>*:not(#topo){position:relative;z-index:1}
+.dot{font-family:'Doto','Space Mono',monospace}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px;font-size:11px;letter-spacing:.22em;color:var(--mute)}
+header button{background:none;border:1px solid #333;color:var(--fg);border-radius:99px;padding:6px 13px;font:inherit;font-size:10px;letter-spacing:.15em}
+#reading{text-align:center}
+#deg{font-size:54px;font-weight:700;line-height:1}
+#card{font-size:17px;color:var(--mute);margin-left:6px;text-transform:lowercase}
+#dialwrap{display:flex;justify-content:center;margin:4px 0}
+#dial{width:min(74vw,37vh,300px);height:auto;aspect-ratio:1}
+#near{text-align:center}
+#name{font-size:12px;letter-spacing:.18em;color:var(--mute);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dist{font-size:40px;font-weight:700;line-height:1.1}
+#next{font-size:10px;color:var(--mute);opacity:.65;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:14px;margin-top:2px}
+#meta{text-align:center;font-size:10px;color:var(--mute);margin-top:8px;letter-spacing:.06em}
+#status{color:var(--red);min-height:13px}
+#list{flex:1;min-height:0;overflow-y:auto;margin-top:8px;border-top:1px solid #1d1d1d;-webkit-overflow-scrolling:touch}
+.row{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:11px 2px;border-bottom:1px solid #151515}
+.ix{color:#444;font-size:12px}
+.r1 .ix{color:var(--red)} .r2 .ix{color:#fff;opacity:.35}
+.pn{font-size:13px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#999}
+.r1 .pn{color:var(--fg)} .r2 .pn{color:#bbb}
+.pc{font-size:10px;color:var(--mute);margin-top:3px}
+.pd{font-size:20px;font-weight:700;color:#999}
+.r1 .pd{color:var(--fg)}
 </style>
 </head>
 <body>
-<h1>🍺 Pub Compass</h1>
-<div id="dial"><div id="arrow"></div></div>
-<div id="name">—</div>
-<div id="dist">—</div>
-<div id="status">Tap Start</div>
-<button id="go">Start</button>
+<svg id="topo"></svg>
+<header><span>PUB COMPASS</span><button id="go">REFRESH</button></header>
+<div id="reading" class="dot"><span id="deg">---°</span><span id="card"></span></div>
+<div id="dialwrap">
+<svg id="dial" viewBox="-160 -160 320 320">
+  <path d="M-6 -158 L6 -158 L0 -147 Z" fill="#ececec"/>
+  <g id="rot">
+    <circle r="140" fill="none" stroke="#2a2a2a"/>
+    <circle r="88" fill="none" stroke="#1d1d1d"/>
+    <g id="ticks" fill="#555"></g>
+    <text class="cl" data-x="0" data-y="-104" fill="#ff2b2b" font-size="14" text-anchor="middle" dominant-baseline="central">N</text>
+    <text class="cl" data-x="104" data-y="0" fill="#888" font-size="12" text-anchor="middle" dominant-baseline="central">E</text>
+    <text class="cl" data-x="0" data-y="104" fill="#888" font-size="12" text-anchor="middle" dominant-baseline="central">S</text>
+    <text class="cl" data-x="-104" data-y="0" fill="#888" font-size="12" text-anchor="middle" dominant-baseline="central">W</text>
+    <g id="p2" opacity="0"><circle cy="-134" r="3.5" fill="#fff" opacity=".35"/><path d="M0 -64 L11 -26 L-11 -26 Z" fill="#fff" opacity=".28"/></g>
+    <g id="p1" opacity="0"><circle cy="-134" r="5" fill="#ff2b2b"/><path d="M0 -80 L16 -26 L-16 -26 Z" fill="#ff2b2b"/></g>
+  </g>
+  <circle r="3" fill="#ececec"/>
+</svg>
+</div>
+<div id="near">
+  <div id="name">—</div>
+  <div id="dist" class="dot">—</div>
+  <div id="next"></div>
+</div>
+<div id="meta"><div id="me">LOCATING…</div><div id="status"></div></div>
+<div id="list"></div>
 
 <script>
-let started=false, pos=null, pub=null, heading=0, hasCompass=false;
 const $=id=>document.getElementById(id);
-const rad=d=>d*Math.PI/180, deg=r=>r*180/Math.PI;
+const rad=d=>d*Math.PI/180;
+let started=false,pos=null,pubs=[],lastFetch=null,lastTry=0,fetching=false,hasCompass=false,target=0,cur=0;
 
-function distance(a,b,c,d){
-  const R=6371000,dLat=rad(c-a),dLon=rad(d-b);
-  const h=Math.sin(dLat/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(dLon/2)**2;
-  return 2*R*Math.asin(Math.sqrt(h));
-}
-function bearing(a,b,c,d){
-  const y=Math.sin(rad(d-b))*Math.cos(rad(c));
-  const x=Math.cos(rad(a))*Math.sin(rad(c))-Math.sin(rad(a))*Math.cos(rad(c))*Math.cos(rad(d-b));
-  return (deg(Math.atan2(y,x))+360)%360;
-}
-function fmt(m){return m<1000?Math.round(m)+" m":(m/1000).toFixed(1)+" km"}
+// background contour lines
+(function(){
+  let out="";
+  [[120,260,1],[300,640,1.25]].forEach(([cx,cy,k],ci)=>{
+    for(let i=1;i<=17;i++){
+      const R=i*15*k;let d="";
+      for(let a=0;a<=360;a+=6){
+        const t=rad(a);
+        const r=R*(1+.18*Math.sin(2*t+ci*2+i*.08)+.1*Math.sin(3*t+1.7+ci)+.06*Math.sin(5*t+i*.1));
+        d+=(a?"L":"M")+(cx+r*Math.cos(t)).toFixed(1)+" "+(cy+r*Math.sin(t)).toFixed(1);
+      }
+      out+=`<path d="${d}Z"/>`;
+    }
+  });
+  const s=$("topo");s.setAttribute("viewBox","0 0 400 800");s.setAttribute("preserveAspectRatio","xMidYMid slice");s.innerHTML=out;
+  let t="";
+  for(let a=0;a<360;a+=5){const x=124*Math.sin(rad(a)),y=-124*Math.cos(rad(a));t+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${a%30?1:2}"/>`}
+  $("ticks").innerHTML=t;
+})();
 
-const SERVERS=[
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-  "https://overpass.private.coffee/api/interpreter"
-];
+function distance(a,b,c,d){const R=6371000,dl=rad(c-a),dn=rad(d-b);const h=Math.sin(dl/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+function bearing(a,b,c,d){const y=Math.sin(rad(d-b))*Math.cos(rad(c));const x=Math.cos(rad(a))*Math.sin(rad(c))-Math.sin(rad(a))*Math.cos(rad(c))*Math.cos(rad(d-b));return(Math.atan2(y,x)*180/Math.PI+360)%360}
+const fmt=m=>m<1000?Math.round(m)+" m":(m/1000).toFixed(1)+" km";
+const card=h=>["N","NE","E","SE","S","SW","W","NW"][Math.round(h/45)%8];
+const coord=(la,lo)=>`${Math.abs(la).toFixed(4)}°${la>=0?"N":"S"} ${Math.abs(lo).toFixed(4)}°${lo>=0?"E":"W"}`;
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const setStatus=t=>$("status").textContent=t;
+
+const SERVERS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter","https://overpass.private.coffee/api/interpreter"];
 async function query(q){
-  let lastErr="no response";
-  for(const url of SERVERS){
+  let err="no response";
+  for(const u of SERVERS){
     try{
-      const ctrl=new AbortController();
-      const t=setTimeout(()=>ctrl.abort(),20000);
-      const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"data="+encodeURIComponent(q),signal:ctrl.signal});
+      const c=new AbortController(),t=setTimeout(()=>c.abort(),20000);
+      const r=await fetch(u,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"data="+encodeURIComponent(q),signal:c.signal});
       clearTimeout(t);
-      if(!res.ok){lastErr="server busy ("+res.status+")";continue}
-      const j=await res.json();
-      return j;
-    }catch(e){lastErr=e.name==="AbortError"?"timed out":"blocked or offline";}
+      if(!r.ok){err="server busy ("+r.status+")";continue}
+      return await r.json();
+    }catch(e){err=e.name==="AbortError"?"timed out":"blocked or offline"}
   }
-  throw new Error(lastErr);
+  throw new Error(err);
 }
-async function findPub(lat,lon){
-  pub=null;
-  $("status").textContent="Searching for pubs…";
-  for(const r of [3000,10000,30000]){
-    const q=`[out:json][timeout:25];(node["amenity"="pub"](around:${r},${lat},${lon});way["amenity"="pub"](around:${r},${lat},${lon}););out center;`;
-    let j;
-    try{j=await query(q);}
-    catch(e){$("status").textContent="Pub data unavailable: "+e.message+". Tap Refresh pub to retry.";return}
-    let best=null,bd=Infinity;
-    for(const e of j.elements||[]){
-      const la=e.lat??e.center?.lat, lo=e.lon??e.center?.lon;
-      if(la==null)continue;
-      const d=distance(lat,lon,la,lo);
-      if(d<bd){bd=d;best={lat:la,lon:lo,name:e.tags?.name||"Unnamed pub"};}
-    }
-    if(best){pub=best;$("status").textContent="Nearest pub found";return}
-  }
-  $("status").textContent="No pubs found within 30 km.";
-}
-
-function update(){
-  if(!pos||!pub)return;
-  const d=distance(pos.lat,pos.lon,pub.lat,pub.lon);
-  const b=bearing(pos.lat,pos.lon,pub.lat,pub.lon);
-  $("name").textContent=pub.name;
-  $("dist").textContent=fmt(d);
-  $("arrow").style.transform=`rotate(${b-(hasCompass?heading:0)}deg)`;
-  if(!hasCompass)$("status").textContent="No compass data: arrow shows bearing from north";
-}
-
-function onOrient(e){
-  let h=null;
-  if(e.webkitCompassHeading!=null)h=e.webkitCompassHeading;
-  else if(e.alpha!=null&&(e.absolute||e.type==="deviceorientationabsolute"))h=360-e.alpha;
-  if(h!=null){heading=h;hasCompass=true;update();}
-}
-
-$("go").onclick=async()=>{
-  $("go").textContent="Refresh pub";
-  if(started){ if(pos) await findPub(pos.lat,pos.lon); update(); return; }
-  started=true;
+async function loadPubs(lat,lon){
+  if(fetching)return;fetching=true;lastTry=Date.now();setStatus("SEARCHING FOR PUBS…");
   try{
-    if(typeof DeviceOrientationEvent!=="undefined"&&DeviceOrientationEvent.requestPermission){
-      await DeviceOrientationEvent.requestPermission();
+    for(const r of [2500,8000,25000]){
+      const j=await query(`[out:json][timeout:25];(node["amenity"="pub"](around:${r},${lat},${lon});way["amenity"="pub"](around:${r},${lat},${lon}););out center;`);
+      const list=[];
+      for(const e of j.elements||[]){const la=e.lat??e.center?.lat,lo=e.lon??e.center?.lon;if(la==null)continue;list.push({lat:la,lon:lo,name:e.tags?.name||"Unnamed pub"})}
+      if(list.length>=3||r===25000){pubs=list;break}
     }
-  }catch(e){}
-  window.addEventListener("deviceorientationabsolute",onOrient,true);
-  window.addEventListener("deviceorientation",onOrient,true);
-  if(!navigator.geolocation){$("status").textContent="No GPS available";return}
-  $("status").textContent="Getting your location…";
-  let first=true;
-  navigator.geolocation.watchPosition(async p=>{
+    lastFetch={lat,lon};setStatus(pubs.length?"":"NO PUBS FOUND NEARBY");
+  }catch(e){setStatus("PUB DATA UNAVAILABLE: "+e.message.toUpperCase())}
+  fetching=false;render();
+}
+
+function render(){
+  if(!pos)return;
+  for(const p of pubs){p.d=distance(pos.lat,pos.lon,p.lat,p.lon);p.b=bearing(pos.lat,pos.lon,p.lat,p.lon)}
+  pubs.sort((a,b)=>a.d-b.d);
+  const top=pubs.slice(0,8),a=top[0],b=top[1];
+  if(a){$("p1").setAttribute("opacity",1);$("p1").setAttribute("transform",`rotate(${a.b})`);$("name").textContent=a.name;$("dist").textContent=fmt(a.d)}
+  else{$("p1").setAttribute("opacity",0);$("name").textContent="—";$("dist").textContent="—"}
+  if(b){$("p2").setAttribute("opacity",1);$("p2").setAttribute("transform",`rotate(${b.b})`);$("next").textContent=`NEXT  ${b.name}  ·  ${fmt(b.d)}`}
+  else{$("p2").setAttribute("opacity",0);$("next").textContent=""}
+  $("list").innerHTML=top.map((p,i)=>`<div class="row r${i+1}"><div class="ix">${i<2?"▲":"•"}</div><div><div class="pn">${esc(p.name)}</div><div class="pc">${coord(p.lat,p.lon)} · ${Math.round(p.b)}° ${card(p.b)}</div></div><div class="pd dot">${fmt(p.d)}</div></div>`).join("");
+}
+
+function tilt(al,be,ga){
+  const A=rad(al),B=rad(be),G=rad(ga);
+  const rA=-Math.cos(A)*Math.sin(G)-Math.sin(A)*Math.sin(B)*Math.cos(G);
+  const rB=-Math.sin(A)*Math.sin(G)+Math.cos(A)*Math.sin(B)*Math.cos(G);
+  let h=Math.atan(rA/rB);
+  if(rB<0)h+=Math.PI;else if(rA<0)h+=2*Math.PI;
+  return h*180/Math.PI;
+}
+function setH(h){
+  target=(h%360+360)%360;
+  if(!hasCompass){hasCompass=true;cur=target}
+}
+function onO(e){
+  if(e.webkitCompassHeading!=null){setH(e.webkitCompassHeading);return}
+  if(e.alpha==null||!(e.absolute||e.type==="deviceorientationabsolute"))return;
+  let h=360-e.alpha;
+  if(e.beta!=null&&e.gamma!=null&&Math.abs(e.beta)>25){const t=tilt(e.alpha,e.beta,e.gamma);if(!isNaN(t))h=t}
+  setH(h);
+}
+function loop(){
+  cur+=(((target-cur+540)%360)-180)*.2;
+  $("rot").setAttribute("transform",`rotate(${-cur})`);
+  document.querySelectorAll(".cl").forEach(t=>t.setAttribute("transform",`translate(${t.dataset.x},${t.dataset.y}) rotate(${cur})`));
+  const h=(cur%360+360)%360;
+  $("deg").textContent=hasCompass?(Math.round(h)%360)+"°":"---°";
+  $("card").textContent=hasCompass?card(h):"";
+  requestAnimationFrame(loop);
+}
+
+function start(){
+  if(started)return;started=true;
+  try{if(DeviceOrientationEvent.requestPermission)DeviceOrientationEvent.requestPermission().catch(()=>{})}catch(e){}
+  window.addEventListener("deviceorientationabsolute",onO,true);
+  window.addEventListener("deviceorientation",onO,true);
+  setTimeout(()=>{if(!hasCompass&&!$("status").textContent)setStatus("NO COMPASS: ARROWS SHOW BEARING FROM NORTH")},4000);
+  if(!navigator.geolocation){setStatus("NO GPS AVAILABLE");return}
+  navigator.geolocation.watchPosition(p=>{
     pos={lat:p.coords.latitude,lon:p.coords.longitude};
-    if(first){first=false;await findPub(pos.lat,pos.lon);}
-    update();
-  },err=>{$("status").textContent="Location blocked. Allow location for this site."},
-  {enableHighAccuracy:true,maximumAge:2000});
-};
+    $("me").textContent=`${coord(pos.lat,pos.lon)}  ·  ±${Math.round(p.coords.accuracy)} m`;
+    const moved=lastFetch?distance(lastFetch.lat,lastFetch.lon,pos.lat,pos.lon)>1500:true;
+    if(moved&&Date.now()-lastTry>20000)loadPubs(pos.lat,pos.lon);else render();
+  },()=>setStatus("LOCATION BLOCKED: ALLOW LOCATION FOR THIS APP"),{enableHighAccuracy:true,maximumAge:2000});
+}
+$("go").onclick=()=>{if(!started){start();return}if(pos){lastFetch=null;loadPubs(pos.lat,pos.lon)}};
+requestAnimationFrame(loop);
+start();
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");
 </script>
 </body>
