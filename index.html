@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1209">
+<title>Pub Compass</title>
+<style>
+  html,body{margin:0;height:100%;background:#1b1209;color:#f3e3c3;font-family:system-ui,sans-serif;text-align:center}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;box-sizing:border-box}
+  h1{margin:0;font-size:1.1rem;letter-spacing:.15em;text-transform:uppercase;color:#d9a441}
+  #dial{width:260px;height:260px;border-radius:50%;border:4px solid #d9a441;display:flex;align-items:center;justify-content:center;position:relative;background:#2a1b0d}
+  #arrow{width:0;height:0;border-left:30px solid transparent;border-right:30px solid transparent;border-bottom:150px solid #e8553d;transition:transform .15s linear;transform-origin:50% 75%}
+  #name{font-size:1.5rem;font-weight:700;min-height:2em}
+  #dist{font-size:2.6rem;font-weight:800;color:#d9a441}
+  #status{font-size:.9rem;opacity:.8;min-height:2.4em}
+  button{background:#d9a441;color:#1b1209;border:0;border-radius:10px;padding:14px 26px;font-size:1rem;font-weight:700}
+</style>
+</head>
+<body>
+<h1>🍺 Pub Compass</h1>
+<div id="dial"><div id="arrow"></div></div>
+<div id="name">—</div>
+<div id="dist">—</div>
+<div id="status">Tap Start</div>
+<button id="go">Start</button>
+
+<script>
+let pos=null, pub=null, heading=0, hasCompass=false;
+const $=id=>document.getElementById(id);
+const rad=d=>d*Math.PI/180, deg=r=>r*180/Math.PI;
+
+function distance(a,b,c,d){
+  const R=6371000,dLat=rad(c-a),dLon=rad(d-b);
+  const h=Math.sin(dLat/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function bearing(a,b,c,d){
+  const y=Math.sin(rad(d-b))*Math.cos(rad(c));
+  const x=Math.cos(rad(a))*Math.sin(rad(c))-Math.sin(rad(a))*Math.cos(rad(c))*Math.cos(rad(d-b));
+  return (deg(Math.atan2(y,x))+360)%360;
+}
+function fmt(m){return m<1000?Math.round(m)+" m":(m/1000).toFixed(1)+" km"}
+
+async function findPub(lat,lon){
+  $("status").textContent="Searching for pubs…";
+  for(const r of [3000,10000,30000]){
+    const q=`[out:json][timeout:25];(node["amenity"="pub"](around:${r},${lat},${lon});way["amenity"="pub"](around:${r},${lat},${lon}););out center;`;
+    try{
+      const res=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)});
+      const j=await res.json();
+      let best=null,bd=Infinity;
+      for(const e of j.elements){
+        const la=e.lat??e.center?.lat, lo=e.lon??e.center?.lon;
+        if(la==null)continue;
+        const d=distance(lat,lon,la,lo);
+        if(d<bd){bd=d;best={lat:la,lon:lo,name:e.tags?.name||"Unnamed pub"};}
+      }
+      if(best){pub=best;$("status").textContent="Nearest pub found";return}
+    }catch(e){$("status").textContent="Couldn't reach pub data. Check signal.";return}
+  }
+  $("status").textContent="No pubs found within 30 km.";
+}
+
+function update(){
+  if(!pos||!pub)return;
+  const d=distance(pos.lat,pos.lon,pub.lat,pub.lon);
+  const b=bearing(pos.lat,pos.lon,pub.lat,pub.lon);
+  $("name").textContent=pub.name;
+  $("dist").textContent=fmt(d);
+  $("arrow").style.transform=`rotate(${b-(hasCompass?heading:0)}deg)`;
+  if(!hasCompass)$("status").textContent="No compass data: arrow shows bearing from north";
+}
+
+function onOrient(e){
+  let h=null;
+  if(e.webkitCompassHeading!=null)h=e.webkitCompassHeading;
+  else if(e.alpha!=null&&(e.absolute||e.type==="deviceorientationabsolute"))h=360-e.alpha;
+  if(h!=null){heading=h;hasCompass=true;update();}
+}
+
+$("go").onclick=async()=>{
+  $("go").textContent="Refresh pub";
+  try{
+    if(typeof DeviceOrientationEvent!=="undefined"&&DeviceOrientationEvent.requestPermission){
+      await DeviceOrientationEvent.requestPermission();
+    }
+  }catch(e){}
+  window.addEventListener("deviceorientationabsolute",onOrient,true);
+  window.addEventListener("deviceorientation",onOrient,true);
+  if(!navigator.geolocation){$("status").textContent="No GPS available";return}
+  $("status").textContent="Getting your location…";
+  let first=true;
+  navigator.geolocation.watchPosition(async p=>{
+    pos={lat:p.coords.latitude,lon:p.coords.longitude};
+    if(first){first=false;await findPub(pos.lat,pos.lon);}
+    update();
+  },err=>{$("status").textContent="Location blocked. Allow location for this site."},
+  {enableHighAccuracy:true,maximumAge:2000});
+};
+</script>
+</body>
+</html>
