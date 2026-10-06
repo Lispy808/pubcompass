@@ -28,7 +28,7 @@
 <button id="go">Start</button>
 
 <script>
-let pos=null, pub=null, heading=0, hasCompass=false;
+let started=false, pos=null, pub=null, heading=0, hasCompass=false;
 const $=id=>document.getElementById(id);
 const rad=d=>d*Math.PI/180, deg=r=>r*180/Math.PI;
 
@@ -44,22 +44,43 @@ function bearing(a,b,c,d){
 }
 function fmt(m){return m<1000?Math.round(m)+" m":(m/1000).toFixed(1)+" km"}
 
+const SERVERS=[
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter"
+];
+async function query(q){
+  let lastErr="no response";
+  for(const url of SERVERS){
+    try{
+      const ctrl=new AbortController();
+      const t=setTimeout(()=>ctrl.abort(),20000);
+      const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"data="+encodeURIComponent(q),signal:ctrl.signal});
+      clearTimeout(t);
+      if(!res.ok){lastErr="server busy ("+res.status+")";continue}
+      const j=await res.json();
+      return j;
+    }catch(e){lastErr=e.name==="AbortError"?"timed out":"blocked or offline";}
+  }
+  throw new Error(lastErr);
+}
 async function findPub(lat,lon){
+  pub=null;
   $("status").textContent="Searching for pubs…";
   for(const r of [3000,10000,30000]){
     const q=`[out:json][timeout:25];(node["amenity"="pub"](around:${r},${lat},${lon});way["amenity"="pub"](around:${r},${lat},${lon}););out center;`;
-    try{
-      const res=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)});
-      const j=await res.json();
-      let best=null,bd=Infinity;
-      for(const e of j.elements){
-        const la=e.lat??e.center?.lat, lo=e.lon??e.center?.lon;
-        if(la==null)continue;
-        const d=distance(lat,lon,la,lo);
-        if(d<bd){bd=d;best={lat:la,lon:lo,name:e.tags?.name||"Unnamed pub"};}
-      }
-      if(best){pub=best;$("status").textContent="Nearest pub found";return}
-    }catch(e){$("status").textContent="Couldn't reach pub data. Check signal.";return}
+    let j;
+    try{j=await query(q);}
+    catch(e){$("status").textContent="Pub data unavailable: "+e.message+". Tap Refresh pub to retry.";return}
+    let best=null,bd=Infinity;
+    for(const e of j.elements||[]){
+      const la=e.lat??e.center?.lat, lo=e.lon??e.center?.lon;
+      if(la==null)continue;
+      const d=distance(lat,lon,la,lo);
+      if(d<bd){bd=d;best={lat:la,lon:lo,name:e.tags?.name||"Unnamed pub"};}
+    }
+    if(best){pub=best;$("status").textContent="Nearest pub found";return}
   }
   $("status").textContent="No pubs found within 30 km.";
 }
@@ -83,6 +104,8 @@ function onOrient(e){
 
 $("go").onclick=async()=>{
   $("go").textContent="Refresh pub";
+  if(started){ if(pos) await findPub(pos.lat,pos.lon); update(); return; }
+  started=true;
   try{
     if(typeof DeviceOrientationEvent!=="undefined"&&DeviceOrientationEvent.requestPermission){
       await DeviceOrientationEvent.requestPermission();
